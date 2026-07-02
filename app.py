@@ -87,7 +87,7 @@ class GenerateOptions(BaseModel):
                                "'basicwl' has no line items; 'extended' allows extra fields.")
     output: Literal["pdf", "xml"] = Field("pdf", description="'pdf' returns a Factur-X PDF (visual + embedded XML). "
                                                              "'xml' returns the CII XML only.")
-    language: Literal["en", "de", "fr"] = Field("en", description="Language of the visual PDF.")
+    language: Literal["en", "de", "fr", "nl"] = Field("en", description="Language of the visual PDF.")
     accent_color: str = Field("#14532d", pattern="^#[0-9a-fA-F]{6}$",
                               description="Accent color of the visual PDF (hex).")
 

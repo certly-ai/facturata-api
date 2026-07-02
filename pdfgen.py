@@ -29,6 +29,15 @@ for d in _FONT_DIRS:
         break
 
 L = {
+    "nl": {"invoice": "FACTUUR", "credit": "CREDITNOTA", "bill_to": "Factuur aan", "from": "Afzender",
+           "number": "Factuurnr.", "issued": "Factuurdatum", "due": "Vervaldatum", "delivered": "Leverdatum",
+           "desc": "Omschrijving", "qty": "Aantal", "unit": "Eenheid", "price": "Stukprijs", "vat": "Btw %",
+           "net": "Netto", "subtotal": "Totaal excl. btw", "vat_line": "Btw {rate}% over {basis}",
+           "vat_exempt": "Btw {cat} over {basis}", "total": "Totaal incl. btw", "prepaid": "Reeds betaald",
+           "due_amt": "Te betalen", "payment": "Betaling", "iban": "IBAN", "bic": "BIC", "ref": "Kenmerk",
+           "terms": "Betalingsvoorwaarden", "notes": "Opmerkingen", "po": "Inkooporder", "buyer_ref": "Referentie koper",
+           "vat_id": "Btw-nummer", "legal_id": "KvK/ondernemingsnr.", "page": "Pagina",
+           "footer": "Factur-X / EN 16931 e-factuur: deze PDF bevat ingebedde machineleesbare XML."},
     "en": {"invoice": "INVOICE", "credit": "CREDIT NOTE", "bill_to": "Bill to", "from": "From",
            "number": "Invoice no.", "issued": "Issue date", "due": "Due date", "delivered": "Delivery date",
            "desc": "Description", "qty": "Qty", "unit": "Unit", "price": "Unit price", "vat": "VAT %",
@@ -63,7 +72,7 @@ CUR_SYM = {"EUR": "€", "USD": "$", "GBP": "£", "CHF": "CHF"}
 
 def fmt_money(x: Decimal, cur: str, lang: str) -> str:
     q = f"{x:,.2f}"
-    if lang in ("de",):
+    if lang in ("de", "nl"):
         q = q.replace(",", "X").replace(".", ",").replace("X", ".")
     elif lang in ("fr",):
         q = q.replace(",", " ").replace(".", ",")
