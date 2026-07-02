@@ -1,8 +1,8 @@
 name: Keep warm
 on:
   schedule:
-    # every 10 minutes, 05:00-21:50 UTC (07:00-23:50 CEST business window)
-    - cron: "*/10 5-21 * * *"
+    # every 10 minutes, 05:00-19:50 UTC (~15h; leaves Render free-tier hours for certly-api's window)
+    - cron: "*/10 5-19 * * *"
   workflow_dispatch: {}
 jobs:
   ping:
