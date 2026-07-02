@@ -1,0 +1,880 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "Facturata \u2014 EU e-Invoicing API (Factur-X / ZUGFeRD / EN 16931)",
+  "description": "Generate compliant Factur-X / ZUGFeRD e-invoices (PDF with embedded XML) from simple JSON, and validate existing e-invoices against the official EN 16931 XSD and schematron rules, including the French 2026 CTC profile. Stateless: documents are processed in memory and never stored.",
+  "contact": {
+   "name": "Facturata"
+  },
+  "version": "1.0.0"
+ },
+ "paths": {
+  "/health": {
+   "get": {
+    "tags": [
+     "meta"
+    ],
+    "summary": "Health",
+    "operationId": "health_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/invoices": {
+   "post": {
+    "tags": [
+     "generate"
+    ],
+    "summary": "Generate a Factur-X e-invoice from JSON",
+    "description": "Send invoice data as JSON, receive a compliant Factur-X / ZUGFeRD e-invoice.\n\nThe engine computes all totals and the VAT breakdown itself, validates the\nresult against the official EN 16931 XSD (hard gate) and schematron, and\nreturns the document plus the validation report. Nothing is stored.",
+    "operationId": "generate_v1_invoices_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GenerateRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/validate": {
+   "post": {
+    "tags": [
+     "validate"
+    ],
+    "summary": "Validate a Factur-X/ZUGFeRD PDF or CII XML",
+    "description": "Checks a document against the official EN 16931 XSD and schematron rules.\n'fr-ctc' additionally applies the French 2026 e-invoicing (Flux 2) ruleset.",
+    "operationId": "validate_v1_validate_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ValidateRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/extract": {
+   "post": {
+    "tags": [
+     "validate"
+    ],
+    "summary": "Extract the embedded XML from a Factur-X PDF",
+    "operationId": "extract_v1_extract_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExtractRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Address": {
+    "properties": {
+     "line1": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Line1",
+      "examples": [
+       "12 Example Street"
+      ]
+     },
+     "line2": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Line2"
+     },
+     "postcode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Postcode",
+      "examples": [
+       "75001"
+      ]
+     },
+     "city": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "City",
+      "examples": [
+       "Paris"
+      ]
+     },
+     "country": {
+      "type": "string",
+      "maxLength": 2,
+      "minLength": 2,
+      "title": "Country",
+      "description": "ISO 3166-1 alpha-2, e.g. FR, DE, NL",
+      "examples": [
+       "FR"
+      ]
+     },
+     "state": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "State",
+      "description": "Region/state code (BT-39/54)"
+     }
+    },
+    "type": "object",
+    "required": [
+     "country"
+    ],
+    "title": "Address"
+   },
+   "ExtractRequest": {
+    "properties": {
+     "pdf_base64": {
+      "type": "string",
+      "title": "Pdf Base64",
+      "description": "Base64 of a Factur-X/ZUGFeRD PDF."
+     }
+    },
+    "type": "object",
+    "required": [
+     "pdf_base64"
+    ],
+    "title": "ExtractRequest"
+   },
+   "GenerateOptions": {
+    "properties": {
+     "profile": {
+      "type": "string",
+      "enum": [
+       "basicwl",
+       "en16931",
+       "extended"
+      ],
+      "title": "Profile",
+      "description": "Factur-X profile. 'en16931' is the standard compliance level; 'basicwl' has no line items; 'extended' allows extra fields.",
+      "default": "en16931"
+     },
+     "output": {
+      "type": "string",
+      "enum": [
+       "pdf",
+       "xml"
+      ],
+      "title": "Output",
+      "description": "'pdf' returns a Factur-X PDF (visual + embedded XML). 'xml' returns the CII XML only.",
+      "default": "pdf"
+     },
+     "language": {
+      "type": "string",
+      "enum": [
+       "en",
+       "de",
+       "fr"
+      ],
+      "title": "Language",
+      "description": "Language of the visual PDF.",
+      "default": "en"
+     },
+     "accent_color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Accent Color",
+      "description": "Accent color of the visual PDF (hex).",
+      "default": "#14532d"
+     }
+    },
+    "type": "object",
+    "title": "GenerateOptions"
+   },
+   "GenerateRequest": {
+    "properties": {
+     "invoice": {
+      "$ref": "#/components/schemas/Invoice"
+     },
+     "options": {
+      "$ref": "#/components/schemas/GenerateOptions",
+      "default": {
+       "profile": "en16931",
+       "output": "pdf",
+       "language": "en",
+       "accent_color": "#14532d"
+      }
+     }
+    },
+    "type": "object",
+    "required": [
+     "invoice"
+    ],
+    "title": "GenerateRequest"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "Invoice": {
+    "properties": {
+     "invoice_number": {
+      "type": "string",
+      "title": "Invoice Number",
+      "examples": [
+       "2026-0042"
+      ]
+     },
+     "issue_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Issue Date",
+      "examples": [
+       "2026-07-02"
+      ]
+     },
+     "due_date": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Due Date",
+      "examples": [
+       "2026-08-01"
+      ]
+     },
+     "delivery_date": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Delivery Date",
+      "description": "Actual delivery / supply date (BT-72). Recommended when it differs from the issue date."
+     },
+     "currency": {
+      "type": "string",
+      "maxLength": 3,
+      "minLength": 3,
+      "title": "Currency",
+      "default": "EUR",
+      "examples": [
+       "EUR"
+      ]
+     },
+     "type_code": {
+      "type": "string",
+      "enum": [
+       "380",
+       "381",
+       "384",
+       "389",
+       "751"
+      ],
+      "title": "Type Code",
+      "description": "380 invoice, 381 credit note, 384 corrective, 389 self-billed, 751 info only",
+      "default": "380"
+     },
+     "seller": {
+      "$ref": "#/components/schemas/Party"
+     },
+     "buyer": {
+      "$ref": "#/components/schemas/Party"
+     },
+     "lines": {
+      "items": {
+       "$ref": "#/components/schemas/Line"
+      },
+      "type": "array",
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Lines"
+     },
+     "payment": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Payment"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "buyer_reference": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Buyer Reference",
+      "description": "Buyer reference / Leitweg-ID for DE public sector (BT-10)"
+     },
+     "purchase_order": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Purchase Order",
+      "description": "Purchase order reference (BT-13)"
+     },
+     "exemption_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Exemption Reason",
+      "description": "Custom VAT exemption reason text (BT-120), for categories E/AE/K/G/O"
+     },
+     "prepaid_amount": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "string",
+        "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prepaid Amount",
+      "description": "Amount already paid (BT-113)"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Notes",
+      "description": "Free-text invoice notes (BT-22)"
+     },
+     "ship_to": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ShipTo"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Delivery address (BG-13). Required for intra-community supplies."
+     }
+    },
+    "type": "object",
+    "required": [
+     "invoice_number",
+     "issue_date",
+     "seller",
+     "buyer",
+     "lines"
+    ],
+    "title": "Invoice"
+   },
+   "Line": {
+    "properties": {
+     "description": {
+      "type": "string",
+      "title": "Description",
+      "examples": [
+       "Consulting services June 2026"
+      ]
+     },
+     "quantity": {
+      "anyOf": [
+       {
+        "type": "number",
+        "exclusiveMinimum": 0.0
+       },
+       {
+        "type": "string",
+        "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+       }
+      ],
+      "title": "Quantity",
+      "examples": [
+       10
+      ]
+     },
+     "unit": {
+      "type": "string",
+      "title": "Unit",
+      "description": "UN/ECE Rec 20 unit code. C62=piece, HUR=hour, DAY=day, KGM=kg, MTR=metre",
+      "default": "C62",
+      "examples": [
+       "HUR"
+      ]
+     },
+     "unit_price": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "string",
+        "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+       }
+      ],
+      "title": "Unit Price",
+      "description": "Net price per unit (BT-146)",
+      "examples": [
+       "95.00"
+      ]
+     },
+     "vat_rate": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 100.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "string",
+        "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+       }
+      ],
+      "title": "Vat Rate",
+      "description": "VAT percentage, e.g. 20 for 20%",
+      "examples": [
+       "20"
+      ]
+     },
+     "vat_category": {
+      "type": "string",
+      "title": "Vat Category",
+      "description": "EN16931 VAT category: S standard, Z zero-rated, E exempt, AE reverse charge, K intra-community, G export, O out of scope",
+      "default": "S"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     }
+    },
+    "type": "object",
+    "required": [
+     "description",
+     "quantity",
+     "unit_price",
+     "vat_rate"
+    ],
+    "title": "Line"
+   },
+   "Party": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "examples": [
+       "ACME France SARL"
+      ]
+     },
+     "address": {
+      "$ref": "#/components/schemas/Address"
+     },
+     "vat_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Vat Id",
+      "description": "VAT identifier incl. country prefix (BT-31/BT-48)",
+      "examples": [
+       "FR40303265045"
+      ]
+     },
+     "legal_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Legal Id",
+      "description": "Legal registration id, e.g. SIREN/SIRET/KvK/HRB (BT-30/BT-47)"
+     },
+     "email": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email",
+      "description": "Electronic address (BT-34/BT-49)"
+     },
+     "contact_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Contact Name"
+     },
+     "contact_phone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Contact Phone"
+     }
+    },
+    "type": "object",
+    "required": [
+     "name",
+     "address"
+    ],
+    "title": "Party"
+   },
+   "Payment": {
+    "properties": {
+     "iban": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Iban",
+      "description": "Payee IBAN (BT-84). Sets payment means to SEPA credit transfer.",
+      "examples": [
+       "FR7630006000011234567890189"
+      ]
+     },
+     "bic": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Bic"
+     },
+     "terms": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Terms",
+      "description": "Payment terms text (BT-20)",
+      "examples": [
+       "Payable within 30 days"
+      ]
+     },
+     "reference": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reference",
+      "description": "Remittance information (BT-83)"
+     }
+    },
+    "type": "object",
+    "title": "Payment"
+   },
+   "ShipTo": {
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "country": {
+      "type": "string",
+      "maxLength": 2,
+      "minLength": 2,
+      "title": "Country",
+      "description": "Deliver-to country (BT-80)"
+     },
+     "city": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "City"
+     },
+     "postcode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Postcode"
+     },
+     "line1": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Line1"
+     }
+    },
+    "type": "object",
+    "required": [
+     "country"
+    ],
+    "title": "ShipTo"
+   },
+   "ValidateRequest": {
+    "properties": {
+     "file_base64": {
+      "type": "string",
+      "title": "File Base64",
+      "description": "Base64 of a Factur-X/ZUGFeRD PDF or a CII XML file."
+     },
+     "check": {
+      "type": "string",
+      "enum": [
+       "base",
+       "fr-ctc"
+      ],
+      "title": "Check",
+      "description": "'base' = EN 16931 rules. 'fr-ctc' adds the French 2026 CTC (Flux 2) rules.",
+      "default": "base"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file_base64"
+    ],
+    "title": "ValidateRequest"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   }
+  }
+ },
+ "servers": [
+  {
+   "url": "https://REPLACE-WITH-RENDER-URL.onrender.com"
+  }
+ ]
+}

@@ -1,0 +1,8 @@
+fastapi==0.139.0
+uvicorn[standard]==0.49.0
+factur-x==5.1
+saxonche==13.0.0
+reportlab==4.5.1
+lxml==6.1.1
+pypdf==6.13.1
+pydantic==2.13.4

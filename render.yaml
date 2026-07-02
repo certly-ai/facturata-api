@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: facturata-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: RAPIDAPI_PROXY_SECRET
+        sync: false
+      - key: FREE_DAILY_LIMIT
+        value: "25"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
