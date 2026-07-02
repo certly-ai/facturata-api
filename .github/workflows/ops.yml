@@ -1,0 +1,44 @@
+name: Ops status check
+on:
+  workflow_dispatch: {}
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Service status + health probe
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+
+          key = os.environ["RENDER_API_KEY"]
+          sid = "srv-d932su0k1i2s73dg75a0"
+
+          def call(url, auth=True):
+              req = urllib.request.Request(url)
+              if auth:
+                  req.add_header("Authorization", f"Bearer {key}")
+              try:
+                  with urllib.request.urlopen(req, timeout=120) as r:
+                      return r.status, r.read().decode()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()[:500]
+              except Exception as e:
+                  return 0, str(e)
+
+          st, body = call(f"https://api.render.com/v1/services/{sid}")
+          svc = json.loads(body) if st == 200 else {}
+          url = (svc.get("serviceDetails") or {}).get("url")
+          print("SERVICE_URL:", url)
+          print("suspended:", svc.get("suspended"))
+
+          st2, deploys = call(f"https://api.render.com/v1/services/{sid}/deploys?limit=1")
+          if st2 == 200:
+              d = json.loads(deploys)[0]["deploy"]
+              print("LAST_DEPLOY:", d.get("status"), "| commit:", (d.get("commit") or {}).get("message", "")[:60])
+
+          if url:
+              st3, health = call(url + "/health", auth=False)
+              print("HEALTH:", st3, health[:200])
+          PY
