@@ -1,0 +1,13 @@
+{
+  "invoice_number": "2026-0042", "issue_date": "2026-07-02", "due_date": "2026-08-01",
+  "delivery_date": "2026-06-30", "currency": "EUR",
+  "seller": {"name": "ACME France SARL", "vat_id": "FR40303265045", "legal_id": "303265045",
+             "email": "billing@acme.example",
+             "address": {"line1": "12 Rue Exemple", "postcode": "75001", "city": "Paris", "country": "FR"}},
+  "buyer": {"name": "Beispiel GmbH", "vat_id": "DE123456788",
+            "address": {"line1": "Musterstr. 1", "postcode": "10115", "city": "Berlin", "country": "DE"}},
+  "payment": {"iban": "FR7630006000011234567890189", "bic": "AGRIFRPP", "terms": "Payable within 30 days"},
+  "lines": [
+    {"description": "Consulting services June 2026", "quantity": 10, "unit": "HUR", "unit_price": "95.00", "vat_rate": "20"},
+    {"description": "Software licence", "quantity": 2, "unit": "C62", "unit_price": "150.00", "vat_rate": "20"}]
+}
