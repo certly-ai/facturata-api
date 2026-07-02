@@ -1,0 +1,62 @@
+name: E2E test through RapidAPI gateway
+on:
+  workflow_dispatch: {}
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health + generate through the gateway
+        env:
+          KEY: ${{ secrets.RAPIDAPI_TEST_KEY }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, urllib.request, urllib.error
+
+          key = os.environ["KEY"]
+          host = "facturata.p.rapidapi.com"
+          base = f"https://{host}"
+
+          def call(method, path, payload=None):
+              req = urllib.request.Request(base + path, method=method)
+              req.add_header("x-rapidapi-key", key)
+              req.add_header("x-rapidapi-host", host)
+              req.add_header("Content-Type", "application/json")
+              data = json.dumps(payload).encode() if payload is not None else None
+              try:
+                  with urllib.request.urlopen(req, data, timeout=180) as r:
+                      return r.status, r.read()
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read()
+
+          st, body = call("GET", "/health")
+          print("HEALTH:", st, body[:200])
+          assert st == 200, "health failed"
+
+          invoice = {
+              "invoice": {
+                  "invoice_number": "TEST-001", "issue_date": "2026-07-02",
+                  "due_date": "2026-08-01", "delivery_date": "2026-07-01",
+                  "currency": "EUR",
+                  "seller": {"name": "ACME France SARL", "vat_id": "FR40303265045",
+                             "address": {"line1": "12 Rue Exemple", "postcode": "75001",
+                                         "city": "Paris", "country": "FR"}},
+                  "buyer": {"name": "Beispiel GmbH", "vat_id": "DE123456788",
+                            "address": {"line1": "Musterstr. 1", "postcode": "10115",
+                                        "city": "Berlin", "country": "DE"}},
+                  "payment": {"iban": "FR7630006000011234567890189", "terms": "Payable within 30 days"},
+                  "lines": [{"description": "Consulting services", "quantity": 10,
+                             "unit": "HUR", "unit_price": "95.00", "vat_rate": "20"}],
+              }
+          }
+          st, body = call("POST", "/v1/invoices", invoice)
+          print("GENERATE status:", st)
+          if st != 200:
+              print(body[:800]); raise SystemExit(1)
+          j = json.loads(body)
+          pdf = base64.b64decode(j["facturx_pdf_base64"])
+          assert pdf[:5] == b"%PDF-", "not a pdf"
+          print("PDF bytes:", len(pdf))
+          print("validation:", json.dumps(j["validation"]))
+          print("totals:", json.dumps(j["totals"]))
+          print("E2E PASS: key -> gateway -> render -> compliant Factur-X PDF")
+          PY
