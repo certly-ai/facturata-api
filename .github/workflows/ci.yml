@@ -1,0 +1,47 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest httpx
+      - run: python -m pytest tests/ -q
+      - name: Cross-check samples with Mustang (official Java validator)
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import os, sys, json, base64
+          os.environ["RAPIDAPI_PROXY_SECRET"]="ci"
+          sys.path.insert(0,'.')
+          from fastapi.testclient import TestClient
+          from app import app
+          c = TestClient(app)
+          inv = json.load(open('tests/sample_invoice.json'))
+          r = c.post('/v1/invoices', json={'invoice': inv}, headers={'X-RapidAPI-Proxy-Secret':'ci'})
+          open('sample.pdf','wb').write(base64.b64decode(r.json()['facturx_pdf_base64']))
+          PY
+          curl -sL -o mustang.jar https://github.com/ZUGFeRD/mustangproject/releases/latest/download/Mustang-CLI.jar
+          java -jar mustang.jar --action validate --source sample.pdf || true
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+            curl -s -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+              -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" -d '{}'
+          else
+            echo "Render secrets not set; skipping deploy trigger (Render auto-deploys on push anyway)."
+          fi

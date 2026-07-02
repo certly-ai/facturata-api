@@ -1,0 +1,63 @@
+name: Provision Render service (one-off)
+on:
+  workflow_dispatch: {}
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Render web service via API
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          TEMP_PROXY_SECRET: ${{ secrets.TEMP_PROXY_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+
+          key = os.environ["RENDER_API_KEY"]
+
+          def call(method, url, payload=None):
+              req = urllib.request.Request(url, method=method)
+              req.add_header("Authorization", f"Bearer {key}")
+              req.add_header("Content-Type", "application/json")
+              data = json.dumps(payload).encode() if payload is not None else None
+              try:
+                  with urllib.request.urlopen(req, data) as r:
+                      return r.status, json.loads(r.read().decode() or "{}")
+              except urllib.error.HTTPError as e:
+                  return e.code, json.loads(e.read().decode() or "{}")
+
+          st, owners = call("GET", "https://api.render.com/v1/owners")
+          assert st == 200, f"owners failed: {st} {owners}"
+          owner_id = owners[0]["owner"]["id"]
+          print("owner:", owner_id)
+
+          body = {
+              "type": "web_service",
+              "name": "facturata-api",
+              "ownerId": owner_id,
+              "repo": "https://github.com/certly-ai/facturata-api",
+              "branch": "main",
+              "autoDeploy": "yes",
+              "serviceDetails": {
+                  "runtime": "python",
+                  "plan": "free",
+                  "region": "frankfurt",
+                  "envSpecificDetails": {
+                      "buildCommand": "pip install -r requirements.txt",
+                      "startCommand": "uvicorn app:app --host 0.0.0.0 --port $PORT",
+                  },
+              },
+              "envVars": [
+                  {"key": "RAPIDAPI_PROXY_SECRET", "value": os.environ.get("TEMP_PROXY_SECRET", "locked")},
+                  {"key": "FREE_DAILY_LIMIT", "value": "25"},
+                  {"key": "PYTHON_VERSION", "value": "3.11.9"},
+              ],
+          }
+          st, resp = call("POST", "https://api.render.com/v1/services", body)
+          print("status:", st)
+          print(json.dumps(resp, indent=2)[:2000])
+          assert st == 201, "service creation failed"
+          svc = resp.get("service", {})
+          print("SERVICE_ID:", svc.get("id"))
+          print("URL:", (svc.get("serviceDetails") or {}).get("url"))
+          PY
