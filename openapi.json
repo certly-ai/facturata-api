@@ -874,7 +874,7 @@
  },
  "servers": [
   {
-   "url": "https://REPLACE-WITH-RENDER-URL.onrender.com"
+   "url": "https://facturata-api.onrender.com"
   }
  ]
 }
