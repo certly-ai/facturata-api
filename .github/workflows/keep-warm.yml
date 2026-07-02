@@ -1,0 +1,16 @@
+name: Keep warm
+on:
+  schedule:
+    # every 10 minutes, 05:00-21:50 UTC (07:00-23:50 CEST business window)
+    - cron: "*/10 5-21 * * *"
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health
+        run: |
+          code=$(curl -s -o /tmp/h -w "%{http_code}" --max-time 90 https://facturata-api.onrender.com/health || true)
+          echo "health: $code $(cat /tmp/h 2>/dev/null | head -c 120)"
+          # Also warm the free validator path used by the site
+          curl -s -o /dev/null --max-time 90 https://facturata.com/ || true
