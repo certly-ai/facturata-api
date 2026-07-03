@@ -46,6 +46,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --------------- anonymous usage counters (in-memory; reset on restart/sleep) ---------------
+import time as _time
+from collections import Counter as _Counter
+
+_STATS_START = _time.time()
+_HITS = _Counter()
+
+
+@app.middleware("http")
+async def _count_hits(request: Request, call_next):
+    response = await call_next(request)
+    p = request.url.path
+    if (p.startswith("/v1/") or p.startswith("/free/")) and response.status_code < 500:
+        _HITS[f"{p}:{response.status_code // 100}xx"] += 1
+    return response
+
+
+@app.get("/stats", tags=["meta"], summary="Anonymous usage counters since last restart")
+def stats():
+    """No auth, no personal data: aggregate request counts per endpoint since process start."""
+    return {"since_epoch": int(_STATS_START),
+            "uptime_hours": round((_time.time() - _STATS_START) / 3600, 2),
+            "hits": dict(_HITS)}
+
 # ---------------- auth ----------------
 
 def require_key(request: Request):
