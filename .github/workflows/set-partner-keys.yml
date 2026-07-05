@@ -1,0 +1,58 @@
+name: set-partner-keys
+on:
+  workflow_dispatch: {}
+jobs:
+  setenv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upsert API_KEYS on Render, redeploy, self-test
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          PARTNER_KEYS: ${{ secrets.PARTNER_KEYS }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          key = os.environ["RENDER_API_KEY"]; val = os.environ["PARTNER_KEYS"]
+          assert val, "PARTNER_KEYS secret empty"
+          sid = "srv-d932su0k1i2s73dg75a0"
+          def call(method, url, payload=None):
+              req = urllib.request.Request(url, method=method)
+              req.add_header("Authorization", "Bearer " + key)
+              req.add_header("Content-Type", "application/json")
+              req.add_header("Accept", "application/json")
+              data = json.dumps(payload).encode() if payload is not None else None
+              try:
+                  with urllib.request.urlopen(req, data) as r:
+                      body = r.read().decode()
+                      return r.status, (json.loads(body) if body else {})
+              except urllib.error.HTTPError as e:
+                  return e.code, {"error": e.read().decode()[:500]}
+          st, res = call("PUT", "https://api.render.com/v1/services/%s/env-vars/API_KEYS" % sid, {"value": val})
+          print("env upsert:", st); assert st in (200, 201), res
+          st, res = call("POST", "https://api.render.com/v1/services/%s/deploys" % sid, {})
+          print("deploy trigger:", st); assert st in (200, 201), res
+          dep = res.get("id")
+          ok = False
+          for i in range(40):
+              time.sleep(15)
+              st, res = call("GET", "https://api.render.com/v1/services/%s/deploys/%s" % (sid, dep))
+              s = res.get("status"); print("deploy:", s)
+              if s == "live":
+                  ok = True; break
+              if s in ("build_failed", "update_failed", "canceled", "deactivated"):
+                  raise SystemExit("deploy failed: " + str(s))
+          if not ok:
+              raise SystemExit("deploy timeout")
+          k1 = val.split(",")[0].strip()
+          req = urllib.request.Request("https://facturata-api.onrender.com/v1/validate", method="POST",
+                data=b"{}", headers={"X-Api-Key": k1, "Content-Type": "application/json",
+                                     "User-Agent": "fable-ops/1.0"})
+          try:
+              with urllib.request.urlopen(req) as r:
+                  code = r.status
+          except urllib.error.HTTPError as e:
+              code = e.code
+          print("self-test status with partner key:", code)
+          assert code != 401, "partner key REJECTED (401), env not picked up"
+          print("PARTNER KEYS LIVE (status %d = passed auth, failed validation as expected)" % code)
+          PY
