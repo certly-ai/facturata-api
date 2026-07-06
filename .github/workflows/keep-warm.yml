@@ -1,16 +1,28 @@
-name: Keep warm
+name: keep-warm
 on:
   schedule:
-    # every 10 minutes, 05:00-19:50 UTC (~15h; leaves Render free-tier hours for certly-api's window)
-    - cron: "*/10 5-19 * * *"
+    - cron: "7 */4 * * *"
   workflow_dispatch: {}
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 235
     steps:
-      - name: Ping health
+      - name: Keep both Render services warm (self-loop ~3h50m, ping every 10 min)
         run: |
-          code=$(curl -s -o /tmp/h -w "%{http_code}" --max-time 90 https://facturata-api.onrender.com/health || true)
-          echo "health: $code $(cat /tmp/h 2>/dev/null | head -c 120)"
-          # Also warm the free validator path used by the site
-          curl -s -o /dev/null --max-time 90 https://facturata.com/ || true
+          # Low-frequency schedule (every 4h) is honored reliably; each run then
+          # self-pings for ~3h50m so the two free-tier Render services never idle
+          # past the ~15-min sleep threshold. Replaces the every-10-min single-ping
+          # cron, which GitHub throttled to ~3 runs/day.
+          URLS="https://facturata-api.onrender.com/health https://certly-api-h15r.onrender.com/health"
+          END=$(( $(date +%s) + 230*60 ))
+          n=0
+          while [ "$(date +%s)" -le "$END" ]; do
+            n=$((n+1))
+            for u in $URLS; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$u" || echo 000)
+              echo "$(date -u +%H:%M:%S) round $n  $u  ->  $code"
+            done
+            sleep 600
+          done
+          echo "finished after $n rounds"
