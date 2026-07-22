@@ -258,7 +258,8 @@ def render_invoice_pdf(inv: Invoice, totals: Totals, lang: str = "en",
             c.drawString(ML, y, f"{k}: {v}"[:95]); y -= 4.2 * mm
         if inv.notes:
             for n in inv.notes[:4]:
-                c.drawString(ML, y, ("• " + n)[:100]); y -= 4.2 * mm
+                text = n if isinstance(n, str) else n.text
+                c.drawString(ML, y, ("• " + text)[:100]); y -= 4.2 * mm
 
     footer(page)
     c.save()

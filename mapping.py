@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -21,6 +21,18 @@ DEFAULT_EXEMPTION_REASON = {
     "K": "Intra-Community supply: VAT exempt under Art. 138 Directive 2006/112/EC",
     "G": "Export outside the EU: VAT exempt under Art. 146 Directive 2006/112/EC",
     "O": "Not subject to VAT",
+}
+
+# French CTC 2026 (Flux 2) mandatory coded mentions (BR-FR-05): each French
+# invoice must carry notes with subject codes PMD, PMT and AAB. Standard legal
+# wording, injected for French sellers unless the caller supplies their own
+# note with the same subject code (BR-FR-06 allows each code only once).
+FR_MANDATORY_NOTES = {
+    "PMD": "Penalites de retard : trois fois le taux d'interet legal annuel, "
+           "exigibles sans qu'un rappel soit necessaire (art. L441-10 du Code de commerce).",
+    "PMT": "Indemnite forfaitaire pour frais de recouvrement en cas de retard de paiement : "
+           "40 EUR (art. D441-5 du Code de commerce).",
+    "AAB": "Escompte pour paiement anticipe : neant.",
 }
 
 
@@ -48,8 +60,15 @@ class Party(BaseModel):
     address: Address
     vat_id: Optional[str] = Field(None, description="VAT identifier incl. country prefix (BT-31/BT-48)",
                                   examples=["FR40303265045"])
-    legal_id: Optional[str] = Field(None, description="Legal registration id, e.g. SIREN/SIRET/KvK/HRB (BT-30/BT-47)")
-    email: Optional[str] = Field(None, description="Electronic address (BT-34/BT-49)")
+    legal_id: Optional[str] = Field(None, description="Legal registration id, e.g. SIREN/SIRET/KvK/HRB (BT-30/BT-47). "
+                                                      "For French parties a SIREN (9 digits) or SIRET (14 digits) also "
+                                                      "derives the Flux 2 electronic address (scheme 0225).")
+    email: Optional[str] = Field(None, description="Contact email")
+    electronic_address: Optional[str] = Field(
+        None, description="Electronic routing address (BT-34/BT-49). Defaults to the SIREN/SIRET for French parties.")
+    electronic_address_scheme: Optional[str] = Field(
+        None, description="Scheme of the electronic address (BT-34-1/BT-49-1), e.g. 0225 for the French "
+                          "Flux 2 SIREN scheme or EM for email. Defaults to 0225 for digit-only addresses, else EM.")
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
 
@@ -83,6 +102,19 @@ class Line(BaseModel):
             raise ValueError("vat_category 'S' (standard) requires vat_rate > 0. "
                              "Use 'Z' for zero-rated supplies.")
         return self
+
+
+class Note(BaseModel):
+    text: str = Field(..., min_length=1, description="Note content (BT-22)")
+    subject_code: Optional[str] = Field(
+        None, min_length=3, max_length=3,
+        description="UNTDID 4451 subject qualifier (BT-21): PMD late-payment penalties, "
+                    "PMT recovery-costs indemnity, AAB settlement discount, BAR invoicing framework, ...")
+
+    @field_validator("subject_code")
+    @classmethod
+    def upper_code(cls, v: Optional[str]) -> Optional[str]:
+        return v.upper() if v else v
 
 
 class Payment(BaseModel):
@@ -124,7 +156,9 @@ class Invoice(BaseModel):
     exemption_reason: Optional[str] = Field(
         None, description="Custom VAT exemption reason text (BT-120), for categories E/AE/K/G/O")
     prepaid_amount: Optional[Decimal] = Field(None, ge=0, description="Amount already paid (BT-113)")
-    notes: Optional[List[str]] = Field(None, description="Free-text invoice notes (BT-22)")
+    notes: Optional[List[Union[str, Note]]] = Field(
+        None, description="Invoice notes (BG-1). Plain strings (BT-22) or objects "
+                          "{text, subject_code} to also set the subject code (BT-21).")
     ship_to: Optional[ShipTo] = Field(None, description="Delivery address (BG-13). Required for intra-community supplies.")
 
     @field_validator("currency")
@@ -194,22 +228,48 @@ def compute_totals(inv: Invoice):
     return totals, vat_groups
 
 
-SELLER_BT = {"name": "BT-27", "vat": "BT-31", "legal": "BT-30", "email": "BT-34",
+SELLER_BT = {"name": "BT-27", "vat": "BT-31", "legal": "BT-30", "eas": "BT-34",
              "addr1": "BT-35", "addr2": "BT-36", "post": "BT-38", "city": "BT-37",
              "country": "BT-40", "state": "BT-39"}
-BUYER_BT = {"name": "BT-44", "vat": "BT-48", "legal": "BT-47", "email": "BT-49",
+BUYER_BT = {"name": "BT-44", "vat": "BT-48", "legal": "BT-47", "eas": "BT-49",
             "addr1": "BT-50", "addr2": "BT-51", "post": "BT-53", "city": "BT-52",
             "country": "BT-55", "state": "BT-54"}
+
+
+def fr_siren(party: Party):
+    """(siren, full_digits) from a French party's legal_id (SIREN 9 or SIRET 14
+    digits, spaces/dots tolerated), or (None, None)."""
+    if party.address.country != "FR" or not party.legal_id:
+        return None, None
+    digits = party.legal_id.replace(" ", "").replace(".", "")
+    if not digits.isdigit() or len(digits) not in (9, 14):
+        return None, None
+    return digits[:9], digits
 
 
 def party_to_bt(party: Party, m: dict) -> dict:
     d = {m["name"]: party.name, m["country"]: party.address.country}
     if party.vat_id:
         d[m["vat"]] = party.vat_id
-    if party.legal_id:
+    siren, digits = fr_siren(party)
+    if siren:
+        # Normalized SIREN as legal id (BR-FR-10 wants exactly 9 digits);
+        # ISO 6523 ICD 0002 = SIRENE registry. The generator only emits the
+        # legal id when a scheme is present.
+        d[m["legal"]] = siren
+        d[m["legal"] + "-1"] = "0002"
+    elif party.legal_id:
         d[m["legal"]] = party.legal_id
-    if party.email:
-        d[m["email"]] = party.email
+    # BT-34/BT-49 electronic address (URIUniversalCommunication). French CTC
+    # 2026: SIREN/SIRET under scheme 0225 (BR-FR-12/13/21/23).
+    eas = party.electronic_address
+    if eas:
+        d[m["eas"]] = eas
+        d[m["eas"] + "-1"] = party.electronic_address_scheme or \
+            ("0225" if eas.replace(" ", "").isdigit() else "EM")
+    elif digits:
+        d[m["eas"]] = digits
+        d[m["eas"] + "-1"] = "0225"
     a = party.address
     if a.line1:
         d[m["addr1"]] = a.line1
@@ -249,8 +309,23 @@ def invoice_to_data_dict(inv: Invoice, level: str = "en16931"):
         d["BT-10"] = inv.buyer_reference
     if inv.purchase_order:
         d["BT-13"] = inv.purchase_order
-    if inv.notes:
-        d["BG-1"] = [{"BT-22": n} for n in inv.notes]
+    notes = []
+    coded = set()
+    for n in inv.notes or []:
+        if isinstance(n, str):
+            notes.append({"BT-22": n})
+        else:
+            e = {"BT-22": n.text}
+            if n.subject_code:
+                e["BT-21"] = n.subject_code
+                coded.add(n.subject_code)
+            notes.append(e)
+    if inv.seller.address.country == "FR":
+        for code, text in FR_MANDATORY_NOTES.items():
+            if code not in coded:
+                notes.append({"BT-21": code, "BT-22": text})
+    if notes:
+        d["BG-1"] = notes
 
     d.update(party_to_bt(inv.seller, SELLER_BT))
     d.update(party_to_bt(inv.buyer, BUYER_BT))

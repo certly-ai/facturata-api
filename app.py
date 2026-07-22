@@ -21,7 +21,7 @@ import engine
 from pdfgen import render_invoice_pdf
 
 APP_NAME = os.environ.get("BRAND_NAME", "Facturata")
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 RAPIDAPI_PROXY_SECRET = os.environ.get("RAPIDAPI_PROXY_SECRET", "")
 DIRECT_API_KEYS = {k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()}

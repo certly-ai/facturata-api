@@ -6,9 +6,29 @@
   "contact": {
    "name": "Facturata"
   },
-  "version": "1.0.0"
+  "version": "1.1.0"
  },
  "paths": {
+  "/stats": {
+   "get": {
+    "tags": [
+     "meta"
+    ],
+    "summary": "Anonymous usage counters since last restart",
+    "description": "No auth, no personal data: aggregate request counts per endpoint since process start.",
+    "operationId": "stats_stats_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
   "/health": {
    "get": {
     "tags": [
@@ -478,7 +498,14 @@
       "anyOf": [
        {
         "items": {
-         "type": "string"
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "$ref": "#/components/schemas/Note"
+          }
+         ]
         },
         "type": "array"
        },
@@ -487,7 +514,7 @@
        }
       ],
       "title": "Notes",
-      "description": "Free-text invoice notes (BT-22)"
+      "description": "Invoice notes (BG-1). Plain strings (BT-22) or objects {text, subject_code} to also set the subject code (BT-21)."
      },
      "ship_to": {
       "anyOf": [
@@ -607,6 +634,35 @@
     ],
     "title": "Line"
    },
+   "Note": {
+    "properties": {
+     "text": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Text",
+      "description": "Note content (BT-22)"
+     },
+     "subject_code": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 3,
+        "minLength": 3
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject Code",
+      "description": "UNTDID 4451 subject qualifier (BT-21): PMD late-payment penalties, PMT recovery-costs indemnity, AAB settlement discount, BAR invoicing framework, ..."
+     }
+    },
+    "type": "object",
+    "required": [
+     "text"
+    ],
+    "title": "Note"
+   },
    "Party": {
     "properties": {
      "name": {
@@ -644,7 +700,7 @@
        }
       ],
       "title": "Legal Id",
-      "description": "Legal registration id, e.g. SIREN/SIRET/KvK/HRB (BT-30/BT-47)"
+      "description": "Legal registration id, e.g. SIREN/SIRET/KvK/HRB (BT-30/BT-47). For French parties a SIREN (9 digits) or SIRET (14 digits) also derives the Flux 2 electronic address (scheme 0225)."
      },
      "email": {
       "anyOf": [
@@ -656,7 +712,31 @@
        }
       ],
       "title": "Email",
-      "description": "Electronic address (BT-34/BT-49)"
+      "description": "Contact email"
+     },
+     "electronic_address": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Electronic Address",
+      "description": "Electronic routing address (BT-34/BT-49). Defaults to the SIREN/SIRET for French parties."
+     },
+     "electronic_address_scheme": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Electronic Address Scheme",
+      "description": "Scheme of the electronic address (BT-34-1/BT-49-1), e.g. 0225 for the French Flux 2 SIREN scheme or EM for email. Defaults to 0225 for digit-only addresses, else EM."
      },
      "contact_name": {
       "anyOf": [
@@ -872,10 +952,5 @@
     "title": "ValidationError"
    }
   }
- },
- "servers": [
-  {
-   "url": "https://facturata-api.onrender.com"
-  }
- ]
+ }
 }
