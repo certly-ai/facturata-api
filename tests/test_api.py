@@ -135,6 +135,51 @@ def test_validate_roundtrip_and_frctc():
     assert "checks" in r2.json()
 
 
+def test_fr_ctc_all_green_for_french_invoice():
+    """FR seller + FR buyer with SIREN: generator output passes the fr-ctc ruleset
+    (coded mentions PMD/PMT/AAB + electronic addresses scheme 0225, BR-FR-05/10/12/13)."""
+    p = copy.deepcopy(BASE)
+    p["buyer"] = {"name": "Boulangerie Martin", "vat_id": "FR87912478831", "legal_id": "912478831",
+                  "address": {"line1": "8 place du Marche", "postcode": "69005", "city": "Lyon",
+                              "country": "FR"}}
+    j = gen(p, options={"output": "xml"}).json()
+    assert j["validation"]["schematron"]["passed"] is True, j["validation"]
+    xml = base64.b64decode(j["xml_base64"]).decode()
+    for frag in ('<ram:SubjectCode>PMD</ram:SubjectCode>', '<ram:SubjectCode>PMT</ram:SubjectCode>',
+                 '<ram:SubjectCode>AAB</ram:SubjectCode>', 'schemeID="0225">303265045<',
+                 'schemeID="0225">912478831<', 'schemeID="0002">303265045<'):
+        assert frag in xml, frag
+    r = client.post("/v1/validate", json={"file_base64": j["xml_base64"], "check": "fr-ctc"}, headers=H)
+    v = r.json()
+    assert r.status_code == 200 and v["valid"] is True, v
+    assert v["checks"]["schematron"]["errors"] == []
+
+
+def test_fr_note_override_no_duplicate_codes():
+    """A caller-supplied coded note replaces the default for that subject code (BR-FR-06)."""
+    p = copy.deepcopy(BASE)
+    p["notes"] = ["Livraison en atelier",
+                  {"text": "Escompte de 2 % pour paiement sous 8 jours.", "subject_code": "AAB"}]
+    j = gen(p, options={"output": "xml"}).json()
+    xml = base64.b64decode(j["xml_base64"]).decode()
+    assert xml.count("<ram:SubjectCode>AAB</ram:SubjectCode>") == 1
+    assert "Escompte de 2 %" in xml
+    assert xml.count("<ram:SubjectCode>PMD</ram:SubjectCode>") == 1
+
+
+def test_non_french_seller_unchanged():
+    """No French mentions or 0225 addresses are injected for non-FR sellers."""
+    p = copy.deepcopy(BASE)
+    p["seller"] = {"name": "Beispiel GmbH", "vat_id": "DE123456788", "legal_id": "HRB 12345",
+                   "address": {"line1": "Musterstr. 1", "postcode": "10115", "city": "Berlin",
+                               "country": "DE"}}
+    p["buyer"] = dict(p["buyer"], vat_id="FR40303265045")
+    j = gen(p, options={"output": "xml"}).json()
+    assert j["validation"]["schematron"]["passed"] is True, j["validation"]
+    xml = base64.b64decode(j["xml_base64"]).decode()
+    assert "SubjectCode" not in xml and "0225" not in xml
+
+
 def test_validate_tampered_total():
     j = gen(options={"output": "xml"}).json()
     xml = base64.b64decode(j["xml_base64"]).decode()
